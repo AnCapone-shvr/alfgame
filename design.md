@@ -1,43 +1,119 @@
 # Operazione Liberazione — Design Document
 
-> Stato corrente: **v4** (file `operazione-liberazione-v4.html`)
-> Ultimo aggiornamento: 5 giugno 2026
+> Stato corrente: **v4** (file `index.html`)
+> Ultimo aggiornamento: 7 giugno 2026
 
 ---
 
 ## 1. Concept
 
-Gioco mobile stealth/puzzle a tema antispecista. Visuale dall'alto. Un gruppo ALF si infiltra in luoghi di sfruttamento animale (allevamento, capannone, zoo, laboratorio, circo, negozio esotici) e libera gli animali uno a uno senza farsi vedere dai sorveglianti.
+Gioco mobile stealth/puzzle a tema antispecista. Visuale dall'alto, pixel art. Un gruppo ALF si infiltra in luoghi di sfruttamento animale e libera gli animali uno a uno senza farsi scoprire dai sorveglianti. Target: App Store e Play Store.
 
-Ispirazione meccanica: Farm Jam / Parking Jam (incastri direzionali) + stealth a cono di vista. Identità grafica: pixel art top-down, palette terrose, atmosfera notturna. Target finale: App Store e Play Store.
+Ispirazione meccanica: Farm Jam / Parking Jam (incastri direzionali) + stealth a cono di vista. ~100 livelli totali, suddivisi in 5-6 ambientazioni da ~20 livelli ciascuna.
 
-## 2. Stato attuale (v4)
+## 2. Struttura livelli
 
-Il gioco esiste come HTML singolo autocontenuto, con asset PNG incorporati in base64. Implementa **solo il livello allevamento**.
+### Principio: poche ambientazioni, molti livelli
 
-Fasi di gioco:
-1. **Apri i cancelli** — 6 cancelli sul recinto, vanno toccati uno a uno per aprire i lucchetti.
-2. **Libera le capre** — toccando una capra, l'attivista la raggiunge e la sblocca; la capra esce in linea retta nella sua direzione, attraversando il cancello assegnato (= il più vicino).
+Ogni **ambientazione** richiede un set di asset dedicato (fondale chiuso/aperto, sprite animale, sprite sorvegliante). Ogni ambientazione ha **~20 livelli** che variano solo i parametri di gioco — stesso fondale, stessa grafica.
 
-Quando tutte le capre sono libere → finale spray con slogan ALF a rotazione casuale.
+### Ambientazioni previste
 
-### Meccaniche chiave
+| # | Ambientazione | Animale | Sorvegliante | Meccanica speciale |
+|---|---------------|---------|--------------|-------------------|
+| 1 | Allevamento | Capre | Allevatore | — (base) |
+| 2 | Capannone industriale | Polli | Operaio | Velocità doppia sorvegliante |
+| 3 | Stalla intensiva | Mucche | Fattore | Animali lenti, griglia più larga |
+| 4 | Zoo | Misti (scimmie, elefanti) | Guardiano | Auto-liberazione: scimmia apre lucchetti |
+| 5 | Laboratorio | Conigli / topi | Ricercatore | Telecamere fisse con cono oscillante |
+| 6 | Circo | Elefanti / tigri | Domatore | Animali helper: elefante sfonda cancello |
 
-- **Sorvegliante** che pattuglia il perimetro del recinto in senso orario, con cono di vista giallo davanti a sé.
-- **Cono di vista**: se una capra è nel cono (anche solo durante il tragitto verso il cancello) → SCOPERTO → ricomincia.
-- **Collisione attivista/sorvegliante**: se durante uno spostamento l'attivista finisce addosso al sorvegliante → SCOPERTO → ricomincia.
-- **Incastri**: una capra è bloccata se nel suo percorso c'è un'altra capra non ancora liberata.
-- **Power-up bastone** (🏏, 2 cariche): armi il bastone e tocchi il sorvegliante per stordirlo 4.5s (perde il cono di vista, non rileva collisioni). Visivamente: stelline 💫 e sprite desaturato.
+### Parametri che scalano tra un livello e l'altro (stessa ambientazione)
 
-## 3. Parametri tecnici
+Ogni livello è un oggetto config:
 
-### LEVEL config (allevamento)
+```
+{
+  id: "allevamento-07",
+  env: "allevamento",           // quale set di asset usare
+  cols: 6, rows: 6,             // dimensioni griglia (può crescere)
+  density: 0.78,                // quante celle occupate
+  guard: {
+    speed: 0.45,                // velocità pattuglia (cresce)
+    half: 26,                   // mezzo-angolo cono in gradi (cresce)
+    range: 2.4,                 // raggio cono in celle (cresce)
+    unpredictable: false,       // inversione random di marcia
+    pauseChance: 0,             // prob. di fermarsi a guardare (0-1)
+  },
+  guards: 1,                    // numero di sorveglianti (1 → 2 → 3)
+  cameras: [],                  // telecamere fisse [{x,y,angle,sweep}]
+  clubCharges: 2,               // cariche bastone (scende nei livelli alti)
+  animalBehavior: "passive",    // "passive" | "noisy" | "self-free" | "helper"
+  timeLimit: 0,                 // 0 = no limite; >0 = secondi
+  stars: { three: 45, two: 90 } // soglie tempo per stelle
+}
+```
+
+### Progressione difficoltà per ambientazione (~20 livelli)
+
+Livelli 1-5 (tutorial): griglia piccola, pochi animali, sorvegliante lento, cono stretto. Introduce una meccanica alla volta.
+
+Livelli 6-10 (media): griglia 6x6, densità alta, sorvegliante più veloce, cono più largo, incastri complessi.
+
+Livelli 11-15 (difficile): secondo sorvegliante o prima telecamera fissa, meno cariche bastone (1 sola), sorvegliante imprevedibile.
+
+Livelli 16-20 (estremo): 2 sorveglianti + telecamere, zero bastone, animali rumorosi, time limit opzionale.
+
+### Meccaniche animali speciali
+
+**Rumorosi** — quando liberati, il sorvegliante si gira verso il suono per 1.5s. Rischio e opportunità tattica.
+
+**Auto-liberazione** — certi animali (scimmie) aprono un cancello da soli. Risparmia un viaggio dell'attivista.
+
+**Helper** — animale liberato aiuta: elefante sfonda cancello, topo disattiva telecamera per 3s.
+
+**Noisy** — polli scappano in direzioni casuali, creando caos.
+
+## 3. Stato attuale (v4)
+
+File HTML singolo autocontenuto con asset PNG in base64. Implementa solo il livello allevamento, senza sistema di selezione livelli.
+
+Fasi di gioco attuali:
+1. Apri i cancelli (6 cancelli, tocca per aprire)
+2. Libera le capre (tocca animale → attivista lo raggiunge → capra esce in linea retta)
+3. Finale spray con slogan ALF
+
+### Meccaniche implementate
+
+- Sorvegliante pattuglia perimetrale con cono di vista
+- Collisione attivista/sorvegliante → scoperto → ricomincia
+- Celle illuminate nel cono → animali non liberabili
+- Incastri direzionali
+- Power-up bastone (2 cariche, stordisce 4.5s)
+- Swap fondale chiuso/aperto
+
+### Da implementare
+
+- Sistema selezione livelli / schermata mondo
+- Array configurazioni livello
+- Progressione / salvataggio (localStorage)
+- Stelle (1-3) per livello
+- Sorveglianti multipli
+- Telecamere fisse
+- Sorvegliante imprevedibile
+- Comportamenti animali speciali
+- Schermata selezione personaggio
+- Audio
+
+## 4. Parametri tecnici (livello allevamento)
+
+### LEVEL config attuale
 
 ```js
 LEVEL = {
   cols: 6, rows: 6,
-  density: 0.78,                          // % di celle occupate da animali
-  pen: { x: .185, y: .334, w: .63, h: .327 },  // recinto in coord. relative al board
+  density: 0.78,
+  pen: { x: .185, y: .334, w: .63, h: .327 },
   gates: [
     { rx: .426, ry: .282, rw: .150, rh: .060, side: 'top'    },
     { rx: .423, ry: .635, rw: .151, rh: .052, side: 'bottom' },
@@ -46,54 +122,41 @@ LEVEL = {
     { rx: .806, ry: .363, rw: .036, rh: .082, side: 'right'  },
     { rx: .805, ry: .496, rw: .037, rh: .086, side: 'right'  },
   ],
-  guard: { speed: .45, half: 26, range: 2.4 },  // velocità, mezzo-angolo cono in gradi, raggio cono in celle
+  guard: { speed: .45, half: 26, range: 2.4 },
 }
 ```
 
-### Geometria pattuglia
+### Note tecniche importanti
 
-Il sorvegliante segue un rettangolo perimetrale espanso di `RO = cell * 0.35` rispetto al `pen`. Funzione `perimAt(s)` con `s ∈ [0,1)` restituisce `{x, y, nx, ny}` sul perimetro.
+- Pattuglia: rettangolo espanso di `cell * 0.35` rispetto al pen. Segmento TOP: `y0 - 5` (fix corridoio).
+- Griglia animali: centrata nel pen, traslata -14px in alto.
+- Collisione: `dist < cell * 0.88` → caught(). Ogni frame + pre-check in tryFreeAnimal. Inibito se sorvegliante stordito.
 
-**Correzione applicata (importante):** sul segmento superiore la y viene corretta a `y0 - 5` per posizionare il sorvegliante nel corridoio sopra le gabbie, non sopra le gabbie stesse.
+## 5. Asset
 
-### Griglia animali
-
-La griglia delle capre è centrata nel `pen` ma **traslata in alto di 14px** rispetto al centro geometrico, per allinearla visivamente alla parte dipinta del recinto.
-
-### Soglia di collisione attivista/sorvegliante
-
-`dist < cell * 0.88` → caught(). Controllo eseguito:
-1. Ogni frame nel `loop()`, con la posizione tracciata in `S.alfPos`.
-2. Anche prima del movimento in `tryFreeAnimal()`, per intercettare il caso in cui il target sia già sopra al sorvegliante.
-
-Il controllo è inibito quando `ctrl.stun > 0` (sorvegliante stordito).
-
-## 4. Asset
-
-Cinque PNG, pixel art top-down, sfondo trasparente o pieno:
+### Ambientazione 1: Allevamento (completata)
 
 | File | Soggetto |
 |------|----------|
 | `ALF.png` | Attivista col passamontagna |
-| `farmer1.png` | Allevatore (sorvegliante del livello allevamento) |
-| `goat1.png` | Capra (animale del livello) |
-| `allevamto1-chiuso.png` | Fondale recinto con cancelli chiusi |
-| `allevamto1-aperto.png` | Fondale recinto con cancelli aperti |
+| `farmer1.png` | Allevatore |
+| `goat1.png` | Capra |
+| `allevamto1-chiuso.png` | Fondale cancelli chiusi |
+| `allevamto1-aperto.png` | Fondale cancelli aperti |
 
-Sono incorporati nell'HTML come `data:image/png;base64,...`.
+L'attivista ALF resta lo stesso in tutte le ambientazioni.
 
-Il fondale fa lo swap automatico chiuso → aperto quando `gatesOpen === gates.length`.
+Per ogni nuova ambientazione servono: 1 fondale chiuso + 1 aperto, 1 sprite animale, 1 sprite sorvegliante.
 
-## 5. Stile visivo
+## 6. Stile visivo
 
-- **Font display**: Anton (slogan, HUD, titoli)
-- **Font UI**: Sora
-- **Palette**: nero/marrone notturno (#0c0f0b, #1a1f18), oro caldo (#d4a942), rosso allerta (#b03020), verde ok (#2e7d4a)
-- **Cono di vista**: gradiente radiale giallo-arancio
-- **Glow torcia**: drop-shadow gialla sul corpo dell'allevatore (è lui stesso la sorgente luminosa, non c'è una torcia separata)
-- **Finale spray**: testo rosso font Anton con bordi morbidi, colature animate `@keyframes drip`, puntini schizzati
+- Font display: Anton / Font UI: Sora
+- Palette: nero-marrone notturno, oro caldo (#d4a942), rosso (#b03020), verde (#2e7d4a)
+- Cono: gradiente radiale giallo-arancio
+- Glow sorvegliante: drop-shadow gialla
+- Finale: spray rosso Anton con colature animate
 
-### Slogan ALF (rotazione casuale al finale)
+### Slogan ALF
 
 ```
 LIBERAZIONE ANIMALE ORA
@@ -103,57 +166,60 @@ ALF · NESSUN PADRONE
 LA LORO VITA NON È MERCE
 ```
 
-## 6. Architettura del codice
+## 7. Architettura del codice
 
-File singolo HTML. Sezioni JS in ordine:
+File singolo HTML. Prossimo refactor necessario per supportare livelli multipli:
+- `LEVELS[]` — array config di tutti i livelli
+- `ENVS{}` — asset per ambientazione
+- `loadLevel(id)` — seleziona config + env e chiama build()
+- Schermata selezione livelli
+- localStorage per progressione e stelle
 
-1. **Costanti**: `SLOGANS`, `LEVEL`, riferimenti DOM
-2. **Stato globale**: `S` (state object), flags (`locked`, `phase`, `gameOver`, ecc.)
-3. **Helpers**: `mk()`, `setPos()`, `setCone()`, `cellX/Y/ctrX/Y`
-4. **`perimAt(s)`**: calcola posizione lungo il perimetro [contiene fix +5px sul top]
-5. **`genAnimals()`**: distribuisce capre e direzioni
-6. **`build()`**: monta tutto il livello (board, celle, cancelli, attivista, animali, cono, sorvegliante)
-7. **`loop(now)`**: game loop con requestAnimationFrame [contiene collision check attivista/sorvegliante]
-8. **`markCone()`**: marca celle dentro il cono di vista
-9. **Logica**: `tryOpenGate`, `tryFreeAnimal`, `pathOf`, `isBlocked`, `bumpAnim`, `exitAnimal`
-10. **`caught()`**: flash rosso + shake + restart
-11. **`endWin()`**: finale spray con slogan
-12. **Power-up**: `clubArm`, `clubBonk`
-13. **FX**: `puff`, `toast`
-14. **UI**: `startGame`, resize handler
+## 8. Cose decise — NON cambiare
 
-## 7. Cose decise e da NON cambiare senza motivo
+- Visuale dall'alto, pixel art
+- Scoperto = ricomincia (niente barra di sospetto)
+- File HTML autosufficiente (per ora)
+- Tono ALF militante
+- ~20 livelli per ambientazione, ~100 totali
+- Complessità tramite parametri, non asset nuovi per ogni livello
 
-- Visuale dall'alto, niente parallasse o pseudo-3D
-- Stealth con cono di vista, non barra di sospetto (l'avevo proposto, Antonio l'ha rifiutato: scoperto = ricomincia)
-- Pixel art (gli asset PNG esistenti vanno preservati)
-- File singolo HTML autosufficiente come build di sviluppo (porting in app nativa dopo)
-- Tono ALF militante, niente edulcorazione
+## 9. TODO (in ordine di priorità)
 
-## 8. Open issues / TODO
+### P1 — Sistema livelli
+- [ ] Refactor: estrarre config in LEVELS[] e asset in ENVS{}
+- [ ] loadLevel(id) + transizione tra livelli
+- [ ] Schermata selezione livello (griglia con stelline)
+- [ ] Salvataggio localStorage
+- [ ] 15-20 config per ambientazione "allevamento" (difficoltà crescente)
 
-### Da fare prossimamente
+### P2 — Meccaniche nuove
+- [ ] Sorvegliante imprevedibile (inversione, pause)
+- [ ] Sorveglianti multipli
+- [ ] Telecamere fisse oscillanti
+- [ ] Animali rumorosi / auto-free / helper
 
-- [ ] Verificare proporzioni reali dei PNG nel gioco (capra forse troppo grande, attivista a riposo da riposizionare)
-- [ ] Animali successivi: maiali, mucche, polli (richiedono PNG dedicati)
-- [ ] Livello 2: **capannone industriale** (operaio veloce, polli, gabbie strette)
-- [ ] Livello 3: **zoo** (auto-liberazione: scimmia apre lucchetti, ultimo animale colpisce il guardiano)
-- [ ] Livello 4: **laboratorio** (medico imprevedibile + telecamera con cono che oscilla)
-- [ ] Schermata selezione personaggio (vari membri ALF)
-- [ ] Audio: musica ambient + effetti
-- [ ] Salvataggio progresso (localStorage)
-- [ ] Build verso app nativa (Capacitor o React Native?)
+### P3 — Nuove ambientazioni (servono asset)
+- [ ] Capannone industriale (polli)
+- [ ] Stalla intensiva (mucche)
+- [ ] Zoo (misti)
+- [ ] Laboratorio (conigli/topi)
+- [ ] Circo (elefanti/tigri)
+
+### P4 — Polish
+- [ ] Audio
+- [ ] Selezione personaggio
+- [ ] Tutorial in-game
+- [ ] Build nativa (Capacitor?)
+- [ ] Integrazione iframe in Herbdivore
 
 ### Bug noti
+- Fondale stirato su ratio diversi da 9:16
+- Capra forse troppo grande, attivista da riposizionare
 
-- Il fondale PNG è dimensionato come sfondo del board (`width:100%; height:100%`), quindi può stiracchiarsi su schermi con proporzioni diverse da 9:16. Da verificare con dispositivi reali.
+## 10. Convenzioni di lavoro
 
-## 9. Convenzioni di lavoro
-
-Quando si riprende il lavoro in una nuova chat:
-
-1. Leggere questo design.md prima di proporre modifiche
-2. Leggere l'HTML più recente caricato nel Project
-3. Verificare se l'utente ha caricato nuovi asset PNG (asset prevalgono su SVG segnaposto)
-4. Non riscrivere parti che funzionano: usare modifiche chirurgiche (str_replace) quando possibile
-5. Quando l'utente segnala un problema visivo, chiedere uno screenshot prima di tentare aggiustamenti pixel-perfect alla cieca
+1. Leggere design.md prima di modifiche
+2. Modifiche chirurgiche, non riscritture totali
+3. Per problemi visivi, chiedere screenshot
+4. Aggiornare design.md dopo modifiche significative
